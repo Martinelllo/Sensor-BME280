@@ -17,3 +17,7 @@ run `sudo systemctl enable pigpiod`
 run `pip install pigpio`
 run `exit()`
 run `make service-up` to install the autostart service
+
+## guide
+
+https://www.laub-home.de/wiki/Raspberry_Pi_BME280_Luftdruck_Sensor
