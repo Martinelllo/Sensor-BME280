@@ -1,0 +1,16 @@
+[Unit]
+Description=This service starts the pyton script on startup to drive the sensors and send requests to the api
+After=network.target
+Requires=pigpiod.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/usr/bin/python3 /home/pi/sensor-project/DHT22/DHT22.py & 
+Restart=always
+RestartSec=5
+StandardInput=tty-force
+
+[Install]
+WantedBy=multi-user.target
