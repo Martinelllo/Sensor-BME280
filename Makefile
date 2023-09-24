@@ -9,7 +9,7 @@ SERVICE_NAME = bme280.service
 SCRIPT_NAME = main.py
 
 # Local Environment
-LOCAL_SRC_DIR = ./src
+LOCAL_SRC_DIR = ./src/
 LOCAL_SSH_DIR = ~/.ssh/id_rsa.pub
 LOCAL_SERVICE_PATH = ./src/$(SERVICE_NAME)
 
@@ -46,6 +46,8 @@ run:  ## runs the script on the pi
 	ssh -t $(HOST) " \
 		/usr/bin/python3 $(HOST_DIR)/$(SCRIPT_NAME) \
 		" \
+
+sync-run: sync run ## sync and run
 
 service-status:  ## restart the service after changes have been uploaded
 	ssh -t $(HOST) "sudo systemctl status $(SERVICE_NAME)"

@@ -1,307 +1,50 @@
-#!/usr/bin/env python
-
-# 2014-07-11 DHT22.py
-
-import atexit
-
+#!/usr/bin/python3
+import board
+import busio
+from adafruit_bme280 import basic as adafruit_bme280
 import time
-
-import pigpio
-
-class sensor:
-   """
-   A class to read relative humidity and temperature from the
-   DHT22 sensor. The sensor is also known as the AM2302.
-
-   The sensor can be powered from the Pi 3V3 or the Pi 5V rail.
-
-   Powering from the 3V3 rail is simpler and safer.  You may need
-   to power from 5V if the sensor is connected via a long cable.
-
-   For 3V3 operation connect pin 1 to 3V3 and pin 4 to ground.
-
-   Connect pin 2 to a gpio.
-
-   For 5V operation connect pin 1 to 5V and pin 4 to ground.
-
-   The following pin 2 connection works for me.  Use at YOUR OWN RISK.
-
-   5V--5K_resistor--+--10K_resistor--Ground
-                    |
-   DHT22 pin 2 -----+
-                    |
-   gpio ------------+
-   """
-
-   def __init__(self, pi, gpio, LED=None, power=None):
-      """
-      Instantiate with the Pi and gpio to which the DHT22 output
-      pin is connected.
-
-      Optionally a LED may be specified.  This will be blinked for
-      each successful reading.
-
-      Optionally a gpio used to power the sensor may be specified.
-      This gpio will be set high to power the sensor.  If the sensor
-      locks it will be power cycled to restart the readings.
-
-      Taking readings more often than about once every two seconds will
-      eventually cause the DHT22 to hang.  A 3 second interval seems OK.
-      """
-
-      self.pi = pi
-      self.gpio = gpio
-      self.LED = LED
-      self.power = power
-
-      if power is not None:
-         pi.write(power, 1)  # Switch sensor on.
-         time.sleep(2)
-
-      self.powered = True
-
-      self.cb = None
-
-      atexit.register(self.cancel)
-
-      self.bad_CS = 0  # Bad checksum count.
-      self.bad_SM = 0  # Short message count.
-      self.bad_MM = 0  # Missing message count.
-      self.bad_SR = 0  # Sensor reset count.
-
-      # Power cycle if timeout > MAX_TIMEOUTS.
-      self.no_response = 0
-      self.MAX_NO_RESPONSE = 2
-
-      self.rhum = -999
-      self.temp = -999
-
-      self.tov = None
-
-      self.high_tick = 0
-      self.bit = 40
-
-      pi.set_pull_up_down(gpio, pigpio.PUD_OFF)
-
-      pi.set_watchdog(gpio, 0)  # Kill any watchdogs.
-
-      self.cb = pi.callback(gpio, pigpio.EITHER_EDGE, self._cb)
-
-   def _cb(self, gpio, level, tick):
-      """
-      Accumulate the 40 data bits.  Format into 5 bytes, humidity high,
-      humidity low, temperature high, temperature low, checksum.
-      """
-      diff = pigpio.tickDiff(self.high_tick, tick)
-
-      if level == 0:
-
-         # Edge length determines if bit is 1 or 0.
-
-         if diff >= 50:
-            val = 1
-            if diff >= 200:   # Bad bit?
-               self.CS = 256  # Force bad checksum.
-         else:
-            val = 0
-
-         if self.bit >= 40:  # Message complete.
-            self.bit = 40
-
-         elif self.bit >= 32:  # In checksum byte.
-            self.CS  = (self.CS << 1)  + val
-
-            if self.bit == 39:
-
-               # 40th bit received.
-
-               self.pi.set_watchdog(self.gpio, 0)
-
-               self.no_response = 0
-
-               total = self.hH + self.hL + self.tH + self.tL
-
-               if (total & 255) == self.CS:  # Is checksum ok?
-
-                  self.rhum = ((self.hH << 8) + self.hL) * 0.1
-
-                  if self.tH & 128:  # Negative temperature.
-                     mult = -0.1
-                     self.tH = self.tH & 127
-                  else:
-                     mult = 0.1
-
-                  self.temp = ((self.tH << 8) + self.tL) * mult
-
-                  self.tov = time.time()
-
-                  if self.LED is not None:
-                     self.pi.write(self.LED, 0)
-
-               else:
-
-                  self.bad_CS += 1
-
-         elif self.bit >= 24:  # in temp low byte
-            self.tL = (self.tL << 1) + val
-
-         elif self.bit >= 16:  # in temp high byte
-            self.tH = (self.tH << 1) + val
-
-         elif self.bit >= 8:  # in humidity low byte
-            self.hL = (self.hL << 1) + val
-
-         elif self.bit >= 0:  # in humidity high byte
-            self.hH = (self.hH << 1) + val
-
-         else:               # header bits
-            pass
-
-         self.bit += 1
-
-      elif level == 1:
-         self.high_tick = tick
-         if diff > 250000:
-            self.bit = -2
-            self.hH = 0
-            self.hL = 0
-            self.tH = 0
-            self.tL = 0
-            self.CS = 0
-
-      else:  # level == pigpio.TIMEOUT:
-         self.pi.set_watchdog(self.gpio, 0)
-         if self.bit < 8:       # Too few data bits received.
-            self.bad_MM += 1    # Bump missing message count.
-            self.no_response += 1
-            if self.no_response > self.MAX_NO_RESPONSE:
-               self.no_response = 0
-               self.bad_SR += 1  # Bump sensor reset count.
-               if self.power is not None:
-                  self.powered = False
-                  self.pi.write(self.power, 0)
-                  time.sleep(2)
-                  self.pi.write(self.power, 1)
-                  time.sleep(2)
-                  self.powered = True
-         elif self.bit < 39:    # Short message receieved.
-            self.bad_SM += 1    # Bump short message count.
-            self.no_response = 0
-
-         else:                  # Full message received.
-            self.no_response = 0
-
-   def temperature(self):
-      """Return current temperature."""
-      return self.temp
-
-   def humidity(self):
-      """Return current relative humidity."""
-      return self.rhum
-
-   def staleness(self):
-      """Return time since measurement made."""
-      if self.tov is not None:
-         return time.time() - self.tov
-      else:
-         return -999
-
-   def bad_checksum(self):
-      """Return count of messages received with bad checksums."""
-      return self.bad_CS
-
-   def short_message(self):
-      """Return count of short messages."""
-      return self.bad_SM
-
-   def missing_message(self):
-      """Return count of missing messages."""
-      return self.bad_MM
-
-   def sensor_resets(self):
-      """Return count of power cycles because of sensor hangs."""
-      return self.bad_SR
-
-   def trigger(self):
-      """Trigger a new relative humidity and temperature reading."""
-      if self.powered:
-         if self.LED is not None:
-            self.pi.write(self.LED, 1)
-
-         self.pi.write(self.gpio, pigpio.LOW)
-         time.sleep(0.017)  # 17 ms
-         self.pi.set_mode(self.gpio, pigpio.INPUT)
-         self.pi.set_watchdog(self.gpio, 200)
-
-   def cancel(self):
-      """Cancel the DHT22 sensor."""
-
-      self.pi.set_watchdog(self.gpio, 0)
-
-      if self.cb is not None:
-         self.cb.cancel()
-         self.cb = None
-
-
-
 from datetime import datetime
 import requests
-# import subprocess
+
+device=2
+
+def sendSensorValue(id, value):
+   body = {
+      "deviceId": device,
+      "sensorId": id,
+      "value": round(value, 1)
+   }
+
+   try:
+      response = requests.post(url + '/sensor-value', json=body, headers=headers)
+      print(response.text)
+   except:
+      print('request error')
 
 
 if __name__ == "__main__":
 
-   # # Start the pigpiod deamon
-   # cmd1 = subprocess.Popen('ps aux'.split(), stdout = subprocess.PIPE)
-   # output, error = cmd1.communicate()
+   i2c = busio.I2C(board.SCL, board.SDA)
+   bme280 = adafruit_bme280.Adafruit_BME280_I2C(i2c, address=0x76)
 
-   # if error: print('error: ' + error)
+   # change this to match the location's pressure (hPa) at sea level
+   # need to be configured for the real altitude. Check your next Weatherstation for the pressure
+   #bme280.sea_level_pressure = 1013.25
 
-   # elif output:
-   #    # check pigpiod is running
-   #    found = str(output).find('pigpiod')
-
-   #    if found == -1:
-   #       # start pigpiod
-   #       print('starting pigpiod...')
-   #       sudoPassword = 'B0denSee'
-   #       cmd2 = subprocess.Popen(['echo',sudoPassword], stdout=subprocess.PIPE)
-   #       cmd3 = subprocess.Popen(['sudo','-S','pigpiod'], stdin=cmd2.stdout, stdout=subprocess.PIPE)
-   #       output, error = cmd3.communicate()
-
-   #       if error: print('error: ' + error)
-
-   #       print('error: ' + error if error else output)
-   #       print('error: ')
-
+   bme280.mode = adafruit_bme280.MODE_NORMAL
    time.sleep(1) # wait until gpiod starts
 
-   INTERVAL = 60 # Intervals of about 2 seconds or less will eventually hang the DHT22.
-
-   pi = pigpio.pi()
-
-   s = sensor(pi, 2)
-
-   r = 0
+   INTERVAL = 1
 
    while True:
 
-      r += 1
+      print("Temperature: %0.1f C" % bme280.temperature)
+      # print("Humidity: %0.1f %%" % bme280.humidity)
+      print("relative Humidity: %0.1f %%" % bme280.relative_humidity)
+      print("absolute Pressure: %0.1f hPa" % bme280.pressure)
+      # print("Altitude = %0.2f meters" % bme280.altitude)
+      print("-------------------------------------")
 
-      s.trigger()
-
-      time.sleep(0.5)
-
-      # print("{} {} {} {:3.2f} {} {} {} {}".format(
-      #    r, 
-      #    s.humidity(), 
-      #    s.temperature(), 
-      #    s.staleness(),
-      #    s.bad_checksum(), 
-      #    s.short_message(), 
-      #    s.missing_message(),
-      #    s.sensor_resets()
-      # ))
 
       url = "https://smarthome-api.hellmannweb.de" # server
       # url = "http://192.168.178.20" # server
@@ -310,39 +53,44 @@ if __name__ == "__main__":
          "Content-Type": "application/json; charset=utf-8",
       }
 
-      temperatureData = {
-         "sensorId": 1,
-         "value": round(s.temperature(), 2)
-      }
+      # utcTimeStamp = datetime.utcnow().timestamp()
+      # currentTime = datetime.now()
 
-      try:
-         response = requests.post(url + '/sensor-value', json=temperatureData, headers=headers)
-         print(response.text)
-      except:
-         print('request error')
-      
-      utcTimeStamp = datetime.utcnow().timestamp()
-      humidityData  = {
-         "sensorId": 2,
-         "value": round(s.humidity(), 2)
-      }
+      # temperatureData = {
+      #    "sensorId": 3,
+      #    "value": round(bme280.temperature, 1)
+      # }
 
-      try:
-         response = requests.post(url + '/sensor-value', json=humidityData, headers=headers)
-         print(response.text)
-      except:
-         print('request error')
+      # humidityData  = {
+      #    "sensorId": 4,
+      #    "value": round(bme280.humidity, 1)
+      # }
+
+      # humidityData  = {
+      #    "sensorId": 5,
+      #    "value": round(bme280.pressure, 1)
+      # }
+
+      # try:
+      #    response = requests.post(url + '/sensor-value', json=temperatureData, headers=headers)
+      #    print(response.text)
+      # except:
+      #    print('request error')
+
+      # try:
+      #    response = requests.post(url + '/sensor-value', json=humidityData, headers=headers)
+      #    print(response.text)
+      # except:
+      #    print('request error')
+
+      # try:
+      #    response = requests.post(url + '/sensor-value', json=humidityData, headers=headers)
+      #    print(response.text)
+      # except:
+      #    print('request error')
 
 
-      currentTime = datetime.now()
-
-      print("{}, Hum: {:3.2f}%, Temp: {:3.2f}°C".format(
-         datetime.strftime(currentTime, '%X'),
-         s.humidity(), 
-         s.temperature(), 
-      ))
-
-      time.sleep(INTERVAL-0.5)  # Overall INTERVAL second polling.
+      time.sleep(INTERVAL)  # Overall INTERVAL second polling.
 
    s.cancel()
    pi.stop()
