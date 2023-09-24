@@ -1,7 +1,7 @@
 
 # host environment
 HOST = pi@192.168.178.31
-HOST_DIR = ~/sensor-project
+HOST_DIR = ~/sensor-bme280
 HOST_SERVICE_DIR = /etc/systemd/system
 
 # Project
