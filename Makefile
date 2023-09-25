@@ -11,7 +11,7 @@ SCRIPT_NAME = main.py
 # Local Environment
 LOCAL_SRC_DIR = ./src/
 LOCAL_SSH_DIR = ~/.ssh/id_rsa.pub
-LOCAL_SERVICE_PATH = ./src/$(SERVICE_NAME)
+LOCAL_SERVICE_PATH = ./$(SERVICE_NAME)
 
 
 
@@ -47,7 +47,7 @@ run:  ## runs the script on the pi
 		/usr/bin/python3 $(HOST_DIR)/$(SCRIPT_NAME) \
 		" \
 
-sync-run: sync run ## sync and run
+sync-run: sync run ##
 
 service-status:  ## restart the service after changes have been uploaded
 	ssh -t $(HOST) "sudo systemctl status $(SERVICE_NAME)"
@@ -63,12 +63,13 @@ service-up: ## moves the service file to the directory on the debian and registe
 	--verbose \
 	--archive \
 	--delete-during \
+	--rsync-path="sudo rsync" \
 	-e 'ssh -p 22' \
 	$(LOCAL_SERVICE_PATH) \
 	$(HOST):$(HOST_SERVICE_DIR)
 
 	ssh -t $(HOST) " \
-		&& sudo chmod 644 $(HOST_SERVICE_DIR)/$(SERVICE_NAME) \
+		sudo chmod 644 $(HOST_SERVICE_DIR)/$(SERVICE_NAME) \
 		&& sudo chmod 644 $(HOST_DIR)/$(SCRIPT_NAME) \
 		&& sudo systemctl enable $(SERVICE_NAME) \
 		&& sudo systemctl daemon-reload \

@@ -14,9 +14,9 @@ def sendSensorValue(id, value, headers):
    }
    try:
       response = requests.post(URL + '/sensor-value', json=body, headers=headers)
-      print('Sensor wert erfolgreich gesendet. Id' + id)
-   except:
-      print('request error')
+      print('Sensor wert erfolgreich gesendet. Id: ' + str(id) + ' value: ' + str(value))
+   except Exception as error:
+      print(error)
 
 
 if __name__ == "__main__":
@@ -42,7 +42,8 @@ if __name__ == "__main__":
    #       "Authorization": "Bearer "+token,
    #    }
    # except:
-   #    print('request error')
+   # except Exception as error:
+   #    print(error)
    #    exit('Unauthorized')
 
    INTERVAL = 60
