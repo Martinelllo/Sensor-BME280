@@ -1,5 +1,5 @@
 
-# host environment
+# Host environment
 HOST = pi@192.168.178.31
 HOST_DIR = ~/sensor-bme280
 HOST_SERVICE_DIR = /etc/systemd/system
@@ -9,7 +9,7 @@ SERVICE_NAME = bme280.service
 SCRIPT_NAME = main.py
 
 # Local Environment
-LOCAL_SRC_DIR = ./src/
+LOCAL_SRC_DIR = ./src
 LOCAL_SSH_DIR = ~/.ssh/id_rsa.pub
 LOCAL_SERVICE_PATH = ./$(SERVICE_NAME)
 
@@ -32,14 +32,9 @@ sync:  ## sync to the HOST, enforce ssh authentication example
 	--recursive \
 	--delete-during \
 	--delete-excluded \
-	--exclude=Python-API \
-	--exclude=Makefile \
-	--exclude=/.git/ \
-	--exclude=/.github/ \
-	--exclude=*.gitignore \
-	--exclude=/.vscode/ \
+	--exclude=__pycache__ \
 	-e 'ssh -p 22' \
-	$(LOCAL_SRC_DIR) \
+	$(LOCAL_SRC_DIR)/ \
 	$(HOST):$(HOST_DIR)
 
 run:  ## runs the script on the pi
@@ -63,6 +58,8 @@ service-up: ## moves the service file to the directory on the debian and registe
 	--verbose \
 	--archive \
 	--delete-during \
+	--delete-excluded \
+	--exclude=__pycache__ \
 	--rsync-path="sudo rsync" \
 	-e 'ssh -p 22' \
 	$(LOCAL_SERVICE_PATH) \
