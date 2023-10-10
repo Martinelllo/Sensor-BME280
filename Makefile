@@ -1,6 +1,6 @@
 
 # Host environment
-HOST = pi@192.168.178.31
+HOST = pi@192.168.178.48
 HOST_DIR = ~/sensor-bme280
 HOST_SERVICE_DIR = /etc/systemd/system
 
@@ -50,8 +50,8 @@ service-status:  ## restart the service after changes have been uploaded
 service-restart:  ## restart the service after changes have been uploaded
 	ssh -t $(HOST) "sudo systemctl restart $(SERVICE_NAME)"
 
-service-stop:  ## restart the service after changes have been uploaded
-	ssh -t $(HOST) "sudo systemctl restart $(SERVICE_NAME)"
+service-stop:  ## stop the service after changes have been uploaded
+	ssh -t $(HOST) "sudo systemctl stop $(SERVICE_NAME)"
 
 service-up: ## moves the service file to the directory on the debian and registers the service
 	rsync \
