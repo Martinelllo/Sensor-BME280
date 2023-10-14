@@ -7,7 +7,7 @@ Conflicts=getty@tty1.service
 [Service]
 Type=simple
 User=pi
-ExecStart=/usr/bin/python3 /home/pi/sensor-bme280/main.py & 
+ExecStart=/usr/bin/python3 /home/pi/sensor-bme280/main.py
 Restart=always
 RestartSec=5
 StandardInput=tty-force

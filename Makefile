@@ -1,4 +1,3 @@
-
 # Host environment
 HOST = pi@192.168.178.48
 HOST_DIR = ~/sensor-bme280
@@ -10,7 +9,7 @@ SCRIPT_NAME = main.py
 
 # Local Environment
 LOCAL_SRC_DIR = ./src
-LOCAL_SSH_DIR = ~/.ssh/id_rsa.pub
+LOCAL_SSH_DIR = ~/.ssh/id_ed25519.pub
 LOCAL_SERVICE_PATH = ./$(SERVICE_NAME)
 
 
@@ -19,7 +18,7 @@ help: ## show all make scripts
 	@fgrep -h "##" $(MAKEFILE_LIST) | fgrep -v fgrep | sed -e 's/\\$$//' | sed -e 's/##//'
 
 ssh-install: ## install ssh on the HOST
-	# -ssh-keygen -f $(LOCAL_KNOWN_HOSTS) -R $(HOST) #comment this out if you want to generate new key instead of using the current
+	# -ssh-keygen -f $(LOCAL_KNOWN_HOSTS) -R $(HOST) #comment this in if you want to generate new key instead of using the current
 	-ssh-copy-id -i $(LOCAL_SSH_DIR) $(HOST)
 
 remote: ## get the ssh pash of the HOST
@@ -49,6 +48,8 @@ service-status:  ## restart the service after changes have been uploaded
 
 service-restart:  ## restart the service after changes have been uploaded
 	ssh -t $(HOST) "sudo systemctl restart $(SERVICE_NAME)"
+
+sync-restart: sync service-restart ##
 
 service-stop:  ## stop the service after changes have been uploaded
 	ssh -t $(HOST) "sudo systemctl stop $(SERVICE_NAME)"
